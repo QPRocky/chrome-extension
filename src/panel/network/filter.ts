@@ -6,51 +6,90 @@ export type StatusFilter = 'all' | '2xx' | '3xx' | '4xx' | '5xx' | 'failed';
 export interface NetFilter {
   /** Space separated terms matched against the URL; `-term` excludes, `/re/i` is a regex. */
   text: string;
+  /** Same syntax as `text`, matched against text response bodies. */
+  body: string;
   method: string;
   type: TypeFilter;
   status: StatusFilter;
 }
 
-export const emptyFilter: NetFilter = { text: '', method: '', type: 'all', status: 'all' };
+export const emptyFilter: NetFilter = { text: '', body: '', method: '', type: 'all', status: 'all' };
 
 export interface CompiledFilter {
   test(entry: NetEntry): boolean;
   error?: string;
+  bodyError?: string;
+  /** Visibility depends on response bodies, which load after the entry is added. */
+  searchesBody: boolean;
+}
+
+export interface TextMatcher {
+  test(haystack: string): boolean;
+  error?: string;
+}
+
+const REGEX_QUERY = /^\/(.+)\/([a-z]*)$/;
+
+/**
+ * Space separated terms that must all match case-insensitively; `-term`
+ * excludes, `/re/i` is a regex. Returns null for an empty query. Uses regexes
+ * rather than `toLowerCase()` so large bodies are not copied on every test.
+ */
+export function compileText(query: string): TextMatcher | null {
+  const text = query.trim();
+  if (!text) return null;
+  const regex = REGEX_QUERY.exec(text);
+  if (regex) {
+    try {
+      // Stateful flags would make repeated test() calls skip matches.
+      const re = new RegExp(regex[1], regex[2].replace(/[gy]/g, ''));
+      return { test: (haystack) => re.test(haystack) };
+    } catch (err) {
+      return { test: () => true, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  const terms = text.split(/\s+/).map((term) => {
+    const exclude = term.startsWith('-') && term.length > 1;
+    return { exclude, re: new RegExp(escapeRegExp(exclude ? term.slice(1) : term), 'i') };
+  });
+  return { test: (haystack) => terms.every(({ exclude, re }) => re.test(haystack) !== exclude) };
+}
+
+/** First plain term of a query, used to highlight matches in the response tree. */
+export function highlightTerm(query: string): string {
+  const text = query.trim();
+  if (REGEX_QUERY.test(text)) return '';
+  return text.split(/\s+/).find((term) => term && !(term.startsWith('-') && term.length > 1)) ?? '';
 }
 
 export function compileFilter(filter: NetFilter): CompiledFilter {
-  const predicates: ((har: HarEntry) => boolean)[] = [];
-  let error: string | undefined;
+  const predicates: ((entry: NetEntry) => boolean)[] = [];
 
-  const text = filter.text.trim();
-  const regex = /^\/(.+)\/([a-z]*)$/.exec(text);
-  if (regex) {
-    try {
-      const re = new RegExp(regex[1], regex[2]);
-      predicates.push((har) => re.test(har.request.url));
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
-    }
-  } else if (text) {
-    for (const term of text.split(/\s+/)) {
-      if (term.startsWith('-') && term.length > 1) {
-        const needle = term.slice(1).toLowerCase();
-        predicates.push((har) => !har.request.url.toLowerCase().includes(needle));
-      } else {
-        const needle = term.toLowerCase();
-        predicates.push((har) => har.request.url.toLowerCase().includes(needle));
-      }
-    }
+  const url = compileText(filter.text);
+  if (url && !url.error) predicates.push((entry) => url.test(entry.har.request.url));
+
+  const body = compileText(filter.body);
+  if (body && !body.error) {
+    predicates.push(({ contentState, content }) => contentState === 'loaded' && !!content && content.encoding !== 'base64' && body.test(content.text));
   }
 
   if (filter.method) {
     const method = filter.method.toUpperCase();
-    predicates.push((har) => har.request.method.toUpperCase() === method);
+    predicates.push((entry) => entry.har.request.method.toUpperCase() === method);
   }
-  if (filter.type !== 'all') predicates.push((har) => resourceCategory(har) === filter.type);
-  if (filter.status !== 'all') predicates.push((har) => statusCategory(har) === filter.status);
+  if (filter.type !== 'all') predicates.push((entry) => resourceCategory(entry.har) === filter.type);
+  if (filter.status !== 'all') predicates.push((entry) => statusCategory(entry.har) === filter.status);
 
-  return { test: (entry) => predicates.every((p) => p(entry.har)), error };
+  return {
+    test: (entry) => predicates.every((p) => p(entry)),
+    error: url?.error,
+    bodyError: body?.error,
+    searchesBody: Boolean(body && !body.error),
+  };
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function resourceCategory(har: HarEntry): Exclude<TypeFilter, 'all'> {

@@ -16,7 +16,7 @@ import {
 import { createSplit } from '../ui/split';
 import { renderTree } from '../ui/tree';
 import { toCurl, toFetch } from './curl';
-import { compileFilter, emptyFilter, resourceCategory, responseError, statusCategory, type NetFilter, type StatusFilter, type TypeFilter } from './filter';
+import { compileFilter, emptyFilter, highlightTerm, resourceCategory, responseError, statusCategory, type NetFilter, type StatusFilter, type TypeFilter } from './filter';
 import { buildHar, buildSimpleJson, entryUrlName, isJsonMime, maybeParseJson, suggestedName } from './har';
 import type { NetEntry, NetEvent, NetworkStore } from './store';
 
@@ -60,6 +60,13 @@ export function createNetworkView(root: HTMLElement): NetworkView {
   const filterInput = h('input', { type: 'search', class: 'filter', placeholder: 'Filter URL  (-exclude, /regex/)', value: filter.text });
   filterInput.addEventListener('input', () => updateFilter({ text: filterInput.value }));
 
+  const bodyInput = h('input', { type: 'search', class: 'filter', placeholder: 'Search responses  (-exclude, /regex/)', value: filter.body });
+  let bodyTimer: ReturnType<typeof setTimeout> | undefined;
+  bodyInput.addEventListener('input', () => {
+    clearTimeout(bodyTimer);
+    bodyTimer = setTimeout(() => updateFilter({ body: bodyInput.value }), 150);
+  });
+
   const methodSelect = select(
     [['', 'All methods'], ['GET', 'GET'], ['POST', 'POST'], ['PUT', 'PUT'], ['PATCH', 'PATCH'], ['DELETE', 'DELETE'], ['OPTIONS', 'OPTIONS']],
     filter.method,
@@ -93,6 +100,7 @@ export function createNetworkView(root: HTMLElement): NetworkView {
     captureBox,
     h('span', { class: 'sep' }),
     filterInput,
+    bodyInput,
     methodSelect,
     typeSelect,
     statusSelect,
@@ -135,6 +143,8 @@ export function createNetworkView(root: HTMLElement): NetworkView {
     compiled = compileFilter(filter);
     filterInput.classList.toggle('invalid', Boolean(compiled.error));
     filterInput.title = compiled.error ?? '';
+    bodyInput.classList.toggle('invalid', Boolean(compiled.bodyError));
+    bodyInput.title = compiled.bodyError ?? '';
     saveFilter(filter);
     rebuildList();
   }
@@ -192,7 +202,7 @@ export function createNetworkView(root: HTMLElement): NetworkView {
   function selectEntry(id: number | null, scroll = false) {
     if (selectedId !== null) rows.get(selectedId)?.classList.remove('selected');
     selectedId = id;
-    responseQuery = '';
+    responseQuery = highlightTerm(filter.body);
     if (id !== null) {
       const row = rows.get(id);
       row?.classList.add('selected');
@@ -211,6 +221,7 @@ export function createNetworkView(root: HTMLElement): NetworkView {
         break;
       }
       case 'updated':
+        if (compiled.searchesBody) syncRow(event.entry);
         if (event.entry.id === selectedId && (detailTab === 'response' || detailTab === 'headers')) renderDetail();
         break;
       case 'removed':
@@ -230,6 +241,29 @@ export function createNetworkView(root: HTMLElement): NetworkView {
         break;
     }
     updateCount();
+  }
+
+  /** Shows or hides a row whose body loaded after it was added, keeping list order. */
+  function syncRow(entry: NetEntry) {
+    const shown = rows.get(entry.id)?.isConnected ?? false;
+    if (!compiled.test(entry)) {
+      if (shown) rows.get(entry.id)!.remove();
+      return;
+    }
+    if (shown || !store) return;
+    const index = store.entries.indexOf(entry);
+    if (index === -1) return;
+    const row = rowFor(entry);
+    for (let i = index + 1; i < store.entries.length; i++) {
+      const next = rows.get(store.entries[i].id);
+      if (next?.isConnected) {
+        tbody.insertBefore(row, next);
+        return;
+      }
+    }
+    const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 4;
+    tbody.appendChild(row);
+    if (atBottom) list.scrollTop = list.scrollHeight;
   }
 
   function renderSettings() {
