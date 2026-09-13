@@ -164,6 +164,32 @@ export function revive(value: unknown): unknown {
   }
 }
 
+/**
+ * Lowercase text of all keys and leaf values in `value`, one per line, for
+ * substring search. Lines keep matches from spanning a key and its value.
+ */
+export function searchText(value: unknown, maxNodes = 5000): string {
+  const parts: string[] = [];
+  const walkObject = (obj: object): void => {
+    for (const [key, child] of Object.entries(obj)) {
+      parts.push(key);
+      walk(child);
+    }
+  };
+  const walk = (v: unknown): void => {
+    if (Array.isArray(v)) return v.forEach(walk);
+    if (typeof v !== 'object' || v === null) return void parts.push(String(v));
+    if (!isMarker(v)) return walkObject(v);
+    if (v.$devkit === 'Map') return v.entries.forEach(([k, child]) => (walk(k), walk(child)));
+    if (v.$devkit === 'Set') return v.values.forEach(walk);
+    // The escaped object itself looks like a marker, so it must not be walked as one.
+    if (v.$devkit === 'object') return walkObject(v.value);
+    parts.push(describeMarker(v));
+  };
+  walk(serialize(value, { maxNodes }));
+  return parts.join('\n').toLowerCase();
+}
+
 /** Short human readable description of a marker, used by the UI. */
 export function describeMarker(m: Marker): string {
   switch (m.$devkit) {

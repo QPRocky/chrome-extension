@@ -3,7 +3,7 @@
 Chrome-extension (MV3), joka lisää DevToolsiin **DevKit**-paneelin:
 
 - **Network**: tallentaa pyynnöt vastausbodyineen heti kun DevTools avataan. Suodatus (teksti, `-poissulku`, `/regex/`, metodi, tyyppi, status), yksityiskohdat, *Copy as cURL / fetch*, vienti **HAR**- (voi raahata Chromen Network-välilehteen) tai yksinkertaistettuna **JSON**-tiedostona.
-- **Redux**: action-loki, tilapuu ja haku, diff, **jump / time travel**, oma dispatch, tilan vienti ja tuonti JSON-tiedostona.
+- **Redux**: action-loki (suodatus tyypin ja payloadin sisällön mukaan, välilyönnillä erotetut termit), tilapuu ja haku, diff, **jump / time travel**, oma dispatch, tilan vienti ja tuonti JSON-tiedostona.
 
 ## Käyttö
 

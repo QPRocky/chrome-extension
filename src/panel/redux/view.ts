@@ -26,6 +26,10 @@ export function createReduxView(root: HTMLElement, client: ReduxClient, navigati
   let tab: EntryPart = 'state';
   let query = '';
   let typeFilter = '';
+  /** Entry ids whose action contents match `typeFilter`, as reported by the page. */
+  let payloadMatches = new Set<number>();
+  let filterToken = 0;
+  let filterTimer: ReturnType<typeof setTimeout> | undefined;
   let initToken = 0;
   let contentToken = 0;
   let listFrame = 0;
@@ -47,10 +51,11 @@ export function createReduxView(root: HTMLElement, client: ReduxClient, navigati
   const banner = h('div', { class: 'banner', hidden: true });
 
   // ── action list ────────────────────────────────────────────────────────
-  const typeInput = h('input', { type: 'search', class: 'filter', placeholder: 'Filter actions' });
+  const typeInput = h('input', { type: 'search', class: 'filter', placeholder: 'Filter actions (type or payload)' });
   typeInput.addEventListener('input', () => {
     typeFilter = typeInput.value.trim().toLowerCase();
     renderList();
+    scheduleFilter();
   });
   const actionList = h('ul', { class: 'actions', tabIndex: 0 });
   actionList.addEventListener('keydown', (event) => {
@@ -141,6 +146,7 @@ export function createReduxView(root: HTMLElement, client: ReduxClient, navigati
           if (followLatest && history.length) selectedId = history[history.length - 1].id;
           scheduleList();
           if (followLatest) scheduleContent();
+          if (typeFilter) scheduleFilter(false);
         }
         break;
       }
@@ -148,6 +154,7 @@ export function createReduxView(root: HTMLElement, client: ReduxClient, navigati
         histories.set(event.storeId, [...event.entries]);
         dropCache(event.storeId);
         if (event.storeId === storeId) {
+          if (typeFilter) scheduleFilter();
           followLatest = true;
           selectedId = event.entries[event.entries.length - 1]?.id ?? null;
           renderList();
@@ -170,6 +177,8 @@ export function createReduxView(root: HTMLElement, client: ReduxClient, navigati
     storeId = null;
     selectedId = null;
     followLatest = true;
+    payloadMatches = new Set();
+    filterToken++;
     renderAll();
     setStatus('Connecting to page…');
 
@@ -209,6 +218,9 @@ export function createReduxView(root: HTMLElement, client: ReduxClient, navigati
     const info = stores.get(id);
     followLatest = info?.jumpedTo == null;
     selectedId = info?.jumpedTo ?? history[history.length - 1]?.id ?? null;
+    payloadMatches = new Set();
+    filterToken++;
+    scheduleFilter();
     renderAll();
   }
 
@@ -330,7 +342,37 @@ export function createReduxView(root: HTMLElement, client: ReduxClient, navigati
 
   function visibleEntries(): ActionSummary[] {
     const history = histories.get(storeId ?? '') ?? [];
-    return typeFilter ? history.filter((e) => e.type.toLowerCase().includes(typeFilter)) : history;
+    if (!typeFilter) return history;
+    // Type matches show immediately; payload matches arrive from the page shortly after.
+    const terms = typeFilter.split(/\s+/);
+    return history.filter((e) => payloadMatches.has(e.id) || terms.every((term) => e.type.toLowerCase().includes(term)));
+  }
+
+  /** `restart` delays a pending search (typing); without it a pending search is kept so frequent actions cannot starve it. */
+  function scheduleFilter(restart = true) {
+    if (!restart && filterTimer !== undefined) return;
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(() => {
+      filterTimer = undefined;
+      void runFilter();
+    }, 150);
+  }
+
+  async function runFilter() {
+    const token = ++filterToken;
+    if (!storeId || !typeFilter) {
+      payloadMatches = new Set();
+      return;
+    }
+    let ids: number[] = [];
+    try {
+      ({ ids } = await client.request('filterActions', { storeId, query: typeFilter }));
+    } catch {
+      // Page unreachable: fall back to filtering by type only.
+    }
+    if (token !== filterToken) return;
+    payloadMatches = new Set(ids);
+    scheduleList();
   }
 
   async function getPart(sId: string, entryId: number, part: EntryPart): Promise<unknown> {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeMarker, isMarker, revive, serialize } from '../src/shared/serialize';
+import { describeMarker, isMarker, revive, searchText, serialize } from '../src/shared/serialize';
 
 describe('serialize', () => {
   it('passes JSON values through unchanged', () => {
@@ -78,5 +78,21 @@ describe('serialize', () => {
       },
     });
     expect(serialize(obj)).toEqual({ bad: { $devkit: 'unreadable', message: 'nope' } });
+  });
+});
+
+describe('searchText', () => {
+  it('collects lowercase keys and leaf values one per line', () => {
+    const text = searchText({
+      type: 'todos/add',
+      payload: { User: { Name: 'Ada' }, tags: ['X', 1] },
+      when: new Date('2026-01-02T03:04:05.000Z'),
+      map: new Map([['mapKey', 'mapValue']]),
+      set: new Set(['inSet']),
+      $devkit: 'escaped',
+    });
+    expect(text.split('\n')).toEqual(
+      expect.arrayContaining(['todos/add', 'user', 'name', 'ada', 'x', '1', '2026-01-02t03:04:05.000z', 'mapkey', 'mapvalue', 'inset', '$devkit', 'escaped']),
+    );
   });
 });

@@ -70,6 +70,26 @@ describe('enhancer hook with Redux Toolkit', () => {
     expect(changes).toEqual([{ path: ['todos', 'items', 0], kind: 'added', after: 'milk', before: undefined }]);
   });
 
+  it('filters history entries by action type and payload', () => {
+    const slice = makeSlice();
+    const store = RTK.configureStore({ reducer: { todos: slice.reducer } });
+    const storeId = latestStoreId();
+    store.dispatch(slice.actions.add('Milk'));
+    store.dispatch(slice.actions.add('bread'));
+    store.dispatch(slice.actions.setFilter('done'));
+    store.dispatch({ type: 'user/set', payload: { user: { name: 'Ada' } } });
+    const filter = (query: string) => registry.handle('filterActions', { storeId, query }).ids;
+
+    expect(filter('milk')).toEqual([1]);
+    expect(filter('MILK')).toEqual([1]);
+    expect(filter('add milk')).toEqual([1]);
+    expect(filter('add done')).toEqual([]);
+    expect(filter('setfilter')).toEqual([3]);
+    expect(filter('payload')).toEqual([1, 2, 3, 4]);
+    expect(filter('ada')).toEqual([4]);
+    expect(filter('  ')).toEqual([]);
+  });
+
   it('jumps to earlier states and resumes the latest one', () => {
     const slice = makeSlice();
     const store = RTK.configureStore({ reducer: { todos: slice.reducer } });

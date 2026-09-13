@@ -44,6 +44,8 @@ export interface RequestMap {
   init: { params: void; result: { stores: StoreInfo[]; histories: Record<string, StoreHistory> } };
   detect: { params: void; result: { stores: StoreInfo[] } };
   getEntry: { params: { storeId: string; entryId: number; part: EntryPart }; result: unknown };
+  /** Ids of history entries whose type or action contents contain every whitespace separated term. */
+  filterActions: { params: { storeId: string; query: string }; result: { ids: number[] } };
   getState: { params: { storeId: string }; result: unknown };
   dispatch: { params: { storeId: string; action: unknown }; result: null };
   jump: { params: { storeId: string; entryId: number }; result: null };

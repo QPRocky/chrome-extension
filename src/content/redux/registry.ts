@@ -10,13 +10,15 @@ import {
   type StoreInfo,
   type StoreMode,
 } from '../../shared/messages';
-import { revive, serialize } from '../../shared/serialize';
+import { revive, searchText, serialize } from '../../shared/serialize';
 import { isPlainAction, type ReduxStore } from './types';
 
 interface HistoryEntry extends ActionSummary {
   action: unknown;
   prevState: unknown;
   nextState: unknown;
+  /** Lowercase type and action contents, computed on the first filter. */
+  searchText?: string;
 }
 
 export interface StoreRecord {
@@ -189,6 +191,19 @@ export class Registry {
           after: c.kind === 'removed' ? undefined : serialize(c.after),
         }),
       );
+    },
+
+    filterActions: ({ storeId, query }) => {
+      const record = this.get(storeId);
+      const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      if (terms.length === 0) return { ids: [] };
+      const ids: number[] = [];
+      for (const entry of record.history) {
+        entry.searchText ??= `${entry.type.toLowerCase()}\n${entry.action === undefined ? '' : searchText(entry.action)}`;
+        const text = entry.searchText;
+        if (terms.every((term) => text.includes(term))) ids.push(entry.id);
+      }
+      return { ids };
     },
 
     getState: ({ storeId }) => serialize(this.get(storeId).inner.getState()),
