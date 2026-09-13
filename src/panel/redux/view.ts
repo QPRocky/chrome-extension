@@ -474,10 +474,13 @@ export function createReduxView(root: HTMLElement, client: ReduxClient, navigati
       content.replaceChildren(renderDiff(value as SerializedChange[]));
       return;
     }
-    const tree = renderTree(value, { expandDepth: tab === 'action' ? 3 : 1, query, rootPath: [] });
-    matchInfo.textContent = query ? `${tree.matches} matches` : '';
+    const filter = tab === 'state';
+    const tree = renderTree(value, { expandDepth: tab === 'action' ? 3 : 1, query, filter, rootPath: [] });
+    const searching = query.trim() !== '';
+    matchInfo.textContent = searching ? `${tree.matches} matches${tree.truncated ? ' (search limit reached)' : ''}` : '';
     const copyBtn = button('Copy JSON', () => copyWithToast(JSON.stringify(value, null, 2), 'Copied'), { class: 'btn small' });
-    content.replaceChildren(h('div', { class: 'content-actions' }, copyBtn), tree.element);
+    const body = filter && searching && tree.matches === 0 && !tree.truncated ? h('div', { class: 'empty' }, 'No matching keys or values.') : tree.element;
+    content.replaceChildren(h('div', { class: 'content-actions' }, copyBtn), body);
   }
 }
 

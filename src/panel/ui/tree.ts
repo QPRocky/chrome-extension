@@ -9,6 +9,8 @@ export interface TreeOptions {
   expandDepth?: number;
   /** Case-insensitive search over keys and primitive values. */
   query?: string;
+  /** Hide nodes that neither match `query` nor contain a match. Children of a matching node are kept. */
+  filter?: boolean;
   /** Prefix used when copying paths, e.g. the store name. */
   rootPath?: Path;
   rootLabel?: string;
@@ -17,6 +19,8 @@ export interface TreeOptions {
 export interface TreeResult {
   element: HTMLElement;
   matches: number;
+  /** The search stopped at the node limit; filtering is skipped because unvisited nodes are unknown. */
+  truncated: boolean;
 }
 
 const CHUNK = 200;
@@ -33,19 +37,28 @@ export function renderTree(value: unknown, options: TreeOptions = {}): TreeResul
   const expandDepth = options.expandDepth ?? 1;
   const query = options.query?.trim().toLowerCase() ?? '';
   const rootPath = options.rootPath ?? [];
-  const { matches, ancestors } = query ? search(value, query) : { matches: new Set<string>(), ancestors: new Set<string>() };
+  const { matches, ancestors, truncated } = query ? search(value, query) : { matches: new Set<string>(), ancestors: new Set<string>(), truncated: false };
+  const filtering = Boolean(options.filter && query) && !truncated;
 
-  const renderNode = (key: string | number | null, label: string | undefined, v: unknown, path: Path, depth: number): HTMLElement => {
-    const children = childrenOf(v);
+  const renderNode = (key: string | number | null, label: string | undefined, v: unknown, path: Path, depth: number, showAll: boolean): HTMLElement => {
     const id = pathKey(path);
     const isMatch = matches.has(id);
+    const keepAll = showAll || isMatch;
+    const all = childrenOf(v);
+    const children =
+      all && !keepAll
+        ? all.filter((child) => {
+            const childId = pathKey([...path, child.key]);
+            return matches.has(childId) || ancestors.has(childId);
+          })
+        : all;
 
     const row = h(
       'div',
       { class: `tree-row${isMatch ? ' match' : ''}` },
       h('span', { class: 'toggle' }, children ? '▸' : ''),
       key !== null ? [h('span', { class: typeof key === 'number' ? 'key index' : 'key' }, label ?? String(key)), h('span', { class: 'colon' }, ': ')] : null,
-      renderPreview(v, children),
+      renderPreview(v, all),
       h(
         'span',
         { class: 'row-actions' },
@@ -66,7 +79,7 @@ export function renderTree(value: unknown, options: TreeOptions = {}): TreeResul
       const end = Math.min(children.length, rendered + CHUNK);
       for (; rendered < end; rendered++) {
         const child = children[rendered];
-        container.appendChild(renderNode(child.key, child.label, child.value, [...path, child.key], depth + 1));
+        container.appendChild(renderNode(child.key, child.label, child.value, [...path, child.key], depth + 1, keepAll));
       }
       if (rendered < children.length) {
         const more = h('div', { class: 'tree-more' }, `Show ${Math.min(CHUNK, children.length - rendered)} more of ${children.length - rendered}`);
@@ -91,8 +104,8 @@ export function renderTree(value: unknown, options: TreeOptions = {}): TreeResul
     return node;
   };
 
-  const element = h('div', { class: 'tree' }, renderNode(options.rootLabel ?? null, undefined, value, [], 0));
-  return { element, matches: matches.size };
+  const element = h('div', { class: 'tree' }, renderNode(options.rootLabel ?? null, undefined, value, [], 0, !filtering));
+  return { element, matches: matches.size, truncated };
 }
 
 function childrenOf(value: unknown): ChildEntry[] | null {
@@ -156,13 +169,17 @@ export function isExpandable(value: unknown): boolean {
   return children !== null && children.length > 0;
 }
 
-function search(value: unknown, query: string): { matches: Set<string>; ancestors: Set<string> } {
+function search(value: unknown, query: string): { matches: Set<string>; ancestors: Set<string>; truncated: boolean } {
   const matches = new Set<string>();
   const ancestors = new Set<string>();
   let visited = 0;
+  let truncated = false;
 
   const walk = (key: string | number | null, label: string | undefined, v: unknown, path: Path): boolean => {
-    if (visited++ > MAX_SEARCH_NODES) return false;
+    if (visited++ > MAX_SEARCH_NODES) {
+      truncated = true;
+      return false;
+    }
     let found = false;
     const children = childrenOf(v);
     if (key !== null && String(label ?? key).toLowerCase().includes(query)) found = true;
@@ -180,7 +197,7 @@ function search(value: unknown, query: string): { matches: Set<string>; ancestor
   };
 
   walk(null, undefined, value, []);
-  return { matches, ancestors };
+  return { matches, ancestors, truncated };
 }
 
 function leafText(value: unknown): string {
