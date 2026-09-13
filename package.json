@@ -1,0 +1,29 @@
+{
+  "name": "devkit-extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "playground": "vite --config playground/vite.config.ts"
+  },
+  "devDependencies": {
+    "@reduxjs/toolkit": "^2.12.0",
+    "@types/chrome": "^0.2.9",
+    "@types/har-format": "^1.2.16",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^29.1.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-redux": "^9.3.0",
+    "redux": "^5.0.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
+  }
+}
