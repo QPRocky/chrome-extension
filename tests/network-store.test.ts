@@ -65,6 +65,66 @@ describe('NetworkStore', () => {
     expect(store.entries.map((e) => e.har.request.url)).toEqual(['https://new.example.com/', 'https://new.example.com/early.js']);
   });
 
+  describe('reloading the same URL', () => {
+    const page = 'https://app.example.com/';
+    const doc = () => harEntry({ _resourceType: 'document', request: { url: page } });
+    const xhr = (name: string) => harEntry({ request: { url: `https://api.example.com/${name}` } });
+    const urls = (store: NetworkStore) => store.entries.map((e) => e.har.request.url);
+
+    it('drops the previous load when the new document finished first', async () => {
+      const { store, fake } = await setup();
+      fake.finish(doc(), '');
+      fake.navigate(page);
+      fake.finish(xhr('old'), '');
+      fake.finish(doc(), '');
+      fake.navigate(page);
+      expect(urls(store)).toEqual([page]);
+      expect(store.entries[0].id).toBe(3);
+    });
+
+    it('clears everything when the new document finishes after the navigation', async () => {
+      const { store, fake, events } = await setup();
+      fake.finish(doc(), '');
+      fake.navigate(page);
+      fake.finish(xhr('old'), '');
+      fake.navigate(page);
+      expect(store.entries).toHaveLength(0);
+      expect(events.at(-1)).toBe('cleared');
+
+      fake.finish(doc(), '');
+      fake.finish(xhr('new'), '');
+      expect(urls(store)).toEqual([page, 'https://api.example.com/new']);
+
+      fake.navigate(page);
+      expect(store.entries).toHaveLength(0);
+    });
+
+    it('does the same with Full capture', async () => {
+      const { store, fake } = await setup({ fullCapture: true });
+      fake.navigate(page);
+      store.addCaptured(doc(), 'loaded', { text: '<html>' });
+      store.addCaptured(xhr('old'), 'loaded', { text: '{}' });
+      fake.navigate(page);
+      expect(store.entries).toHaveLength(0);
+
+      store.addCaptured(doc(), 'loaded', { text: '<html>' });
+      store.addCaptured(xhr('new'), 'loaded', { text: '{}' });
+      fake.navigate(page);
+      expect(store.entries).toHaveLength(0);
+    });
+
+    it('recognizes the pending document after preserving the log', async () => {
+      const { store, fake } = await setup({ preserveLog: true });
+      fake.finish(doc(), '');
+      fake.navigate(page);
+      fake.finish(xhr('old'), '');
+      store.updateSettings({ preserveLog: false });
+      fake.finish(doc(), '');
+      fake.navigate(page);
+      expect(urls(store)).toEqual([page]);
+    });
+  });
+
   it('preserves the log across navigations when enabled', async () => {
     const { store, fake } = await setup({ preserveLog: true });
     fake.finish(harEntry(), '');

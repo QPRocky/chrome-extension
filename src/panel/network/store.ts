@@ -62,6 +62,10 @@ export class NetworkStore {
   settings: NetSettings = { recording: true, preserveLog: false, maxBodyMB: 5, fullCapture: false };
 
   private nextId = 1;
+  /** Id of the current page's document request; older entries belong to earlier pages. */
+  private pageDocId = 0;
+  /** Navigation whose document request had not finished yet when it was reported. */
+  private pendingDoc: { url: string; since: number } | null = null;
   private captureError: string | null = null;
   private readonly listeners = new Set<(event: NetEvent) => void>();
 
@@ -149,6 +153,11 @@ export class NetworkStore {
   private record(har: HarEntry, contentState: ContentState, content?: NetEntry['content']): NetEntry {
     const entry: NetEntry = content ? { id: this.nextId++, har, contentState, content } : { id: this.nextId++, har, contentState };
     this.entries.push(entry);
+    const pending = this.pendingDoc;
+    if (pending && har._resourceType === 'document' && har.request.url === pending.url && Date.parse(har.startedDateTime) <= pending.since) {
+      this.pageDocId = entry.id;
+      this.pendingDoc = null;
+    }
     if (this.entries.length > MAX_ENTRIES) {
       const removed = this.entries.splice(0, this.entries.length - MAX_ENTRIES);
       this.emit({ type: 'removed', ids: removed.map((e) => e.id) });
@@ -158,19 +167,29 @@ export class NetworkStore {
   }
 
   /**
-   * DevTools reports navigation after the new document request has already
-   * finished, so keep that document request and everything after it.
+   * DevTools may report navigation before or after the new document request
+   * finishes. If it is already recorded, keep it and everything after it;
+   * otherwise clear everything and remember it as pending. Only documents newer
+   * than the current page's are considered, so a reload of the same URL does
+   * not match the previous load.
    */
   navigated(url: string): void {
-    if (this.settings.preserveLog) return;
     let keepFrom = this.entries.length;
-    for (let i = this.entries.length - 1; i >= 0; i--) {
+    for (let i = this.entries.length - 1; i >= 0 && this.entries[i].id > this.pageDocId; i--) {
       const har = this.entries[i].har;
       if (har._resourceType === 'document' && har.request.url === url) {
         keepFrom = i;
         break;
       }
     }
+    if (keepFrom < this.entries.length) {
+      this.pageDocId = this.entries[keepFrom].id;
+      this.pendingDoc = null;
+    } else {
+      this.pendingDoc = { url, since: Date.now() };
+    }
+
+    if (this.settings.preserveLog) return;
     const removed = this.entries.splice(0, keepFrom);
     if (removed.length === 0) return;
     if (this.entries.length === 0) this.emit({ type: 'cleared' });
