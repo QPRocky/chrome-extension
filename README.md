@@ -3,6 +3,7 @@
 Chrome-extension (MV3), joka lisää DevToolsiin **DevKit**-paneelin:
 
 - **Network**: tallentaa pyynnöt vastausbodyineen heti kun DevTools avataan. Suodatus (teksti, `-poissulku`, `/regex/`, metodi, tyyppi, status), yksityiskohdat, *Copy as cURL / fetch*, vienti **HAR**- (voi raahata Chromen Network-välilehteen) tai yksinkertaistettuna **JSON**-tiedostona.
+  - **Full capture** (toolbarin valinta): tallentaa `chrome.debugger`in kautta `chrome.devtools.network`in sijaan. Chrome jättää extensioneilta pois pyynnöt, joiden initiator-stackissa, redirectissä tai `Location`/`Link`-headerissa on URL, johon extensionilla ei ole pääsyä – esimerkiksi toisen extensionin skripti. Jos Redux DevTools (tai muu sivulle injektoiva extension) on asennettu, tämä koskee käytännössä kaikkia thunkeista lähteviä fetch/XHR-pyyntöjä, jolloin Fetch/XHR-lista jää tyhjäksi. Full capture näkee ne. Kun se on päällä, Chrome näyttää "debugging this browser" -palkin; palkin *Cancel* kytkee Full capturen pois. WebSocketit ja erillisprosessissa ajettavat iframet eivät näy Full capturessa.
 - **Redux**: action-loki (suodatus tyypin ja payloadin sisällön mukaan, välilyönnillä erotetut termit), tilapuu ja haku, diff, **jump / time travel**, oma dispatch, tilan vienti ja tuonti JSON-tiedostona.
 
 ## Käyttö

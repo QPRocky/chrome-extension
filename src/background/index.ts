@@ -1,9 +1,15 @@
-import { SOURCE, isEnvelope, type Envelope, type PanelOutbound, type RelayEvent } from '../shared/messages';
+import { CAPTURE_PORT_PREFIX, SOURCE, isEnvelope, type Envelope, type PanelOutbound, type RelayEvent } from '../shared/messages';
+import { handleCapturePort } from './capture';
 
 const PANEL_PREFIX = 'panel:';
 const panels = new Map<number, chrome.runtime.Port>();
 
 chrome.runtime.onConnect.addListener((port) => {
+  if (port.name.startsWith(CAPTURE_PORT_PREFIX)) {
+    const tabId = Number(port.name.slice(CAPTURE_PORT_PREFIX.length));
+    if (Number.isInteger(tabId)) handleCapturePort(port, tabId);
+    return;
+  }
   if (!port.name.startsWith(PANEL_PREFIX)) return;
   const tabId = Number(port.name.slice(PANEL_PREFIX.length));
   if (!Number.isInteger(tabId)) return;

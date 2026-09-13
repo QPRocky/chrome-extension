@@ -22,6 +22,8 @@ export interface NetSettings {
   recording: boolean;
   preserveLog: boolean;
   maxBodyMB: number;
+  /** Record with `chrome.debugger` instead of `chrome.devtools.network`, see capture-client.ts. */
+  fullCapture: boolean;
 }
 
 type RequestFinished = HarEntry & {
@@ -57,9 +59,10 @@ export const chromeSettingsStorage: SettingsStorage = {
  */
 export class NetworkStore {
   readonly entries: NetEntry[] = [];
-  settings: NetSettings = { recording: true, preserveLog: false, maxBodyMB: 5 };
+  settings: NetSettings = { recording: true, preserveLog: false, maxBodyMB: 5, fullCapture: false };
 
   private nextId = 1;
+  private captureError: string | null = null;
   private readonly listeners = new Set<(event: NetEvent) => void>();
 
   constructor(private readonly storage?: SettingsStorage) {}
@@ -85,9 +88,22 @@ export class NetworkStore {
 
   updateSettings(patch: Partial<NetSettings>): void {
     this.settings = { ...this.settings, ...patch };
-    const { preserveLog, maxBodyMB } = this.settings;
-    void this.storage?.set({ preserveLog, maxBodyMB }).catch(() => {});
+    const { preserveLog, maxBodyMB, fullCapture } = this.settings;
+    void this.storage?.set({ preserveLog, maxBodyMB, fullCapture }).catch(() => {});
     this.emit({ type: 'settings' });
+  }
+
+  /** Turns Full capture off after the debugger session failed or was closed. */
+  failCapture(message: string): void {
+    this.captureError = message;
+    this.updateSettings({ fullCapture: false });
+  }
+
+  /** Returns the last Full capture failure once, so it is reported a single time. */
+  takeCaptureError(): string | null {
+    const error = this.captureError;
+    this.captureError = null;
+    return error;
   }
 
   clear(): void {
@@ -100,17 +116,10 @@ export class NetworkStore {
   }
 
   add(request: RequestFinished): NetEntry | null {
-    if (!this.settings.recording) return null;
+    // Full capture sees the same requests; avoid duplicates.
+    if (!this.settings.recording || this.settings.fullCapture) return null;
 
-    const har = toPlainEntry(request);
-    const entry: NetEntry = { id: this.nextId++, har, contentState: 'pending' };
-    this.entries.push(entry);
-    if (this.entries.length > MAX_ENTRIES) {
-      const removed = this.entries.splice(0, this.entries.length - MAX_ENTRIES);
-      this.emit({ type: 'removed', ids: removed.map((e) => e.id) });
-    }
-    this.emit({ type: 'added', entry });
-
+    const entry = this.record(toPlainEntry(request), 'pending');
     const maxChars = this.settings.maxBodyMB * 1024 * 1024;
     try {
       request.getContent((content, encoding) => {
@@ -128,6 +137,23 @@ export class NetworkStore {
       entry.contentState = 'error';
       this.emit({ type: 'updated', entry });
     }
+    return entry;
+  }
+
+  /** Adds a request recorded by Full capture, with its body already loaded. */
+  addCaptured(har: HarEntry, contentState: ContentState, content?: NetEntry['content']): NetEntry | null {
+    if (!this.settings.recording || !this.settings.fullCapture) return null;
+    return this.record(har, contentState, content);
+  }
+
+  private record(har: HarEntry, contentState: ContentState, content?: NetEntry['content']): NetEntry {
+    const entry: NetEntry = content ? { id: this.nextId++, har, contentState, content } : { id: this.nextId++, har, contentState };
+    this.entries.push(entry);
+    if (this.entries.length > MAX_ENTRIES) {
+      const removed = this.entries.splice(0, this.entries.length - MAX_ENTRIES);
+      this.emit({ type: 'removed', ids: removed.map((e) => e.id) });
+    }
+    this.emit({ type: 'added', entry });
     return entry;
   }
 

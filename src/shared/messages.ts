@@ -6,6 +6,8 @@
  * panel ──Port──▶ background ──tabs.sendMessage──▶ bridge ──window.postMessage──▶ page hook
  */
 
+import type { ContentState, HarEntry, NetEntry } from '../panel/network/store';
+
 export const SOURCE = 'devkit';
 export const SET_STATE = '@@DEVKIT/SET_STATE';
 
@@ -78,6 +80,19 @@ export type RelayEvent = { kind: 'page-unavailable'; requestId?: number; error: 
 
 export type PanelInbound = PageEvent | RelayEvent;
 export type PanelOutbound = PageRequest | { kind: 'ping' };
+
+/**
+ * Full capture: the DevTools page opens a `capture:<tabId>` port and the background
+ * records the tab's network traffic with `chrome.debugger` until the port closes.
+ */
+export const CAPTURE_PORT_PREFIX = 'capture:';
+
+export type CaptureCommand = { kind: 'start'; maxBodyMB: number };
+
+export type CaptureEvent =
+  | { kind: 'entry'; har: HarEntry; contentState: ContentState; content?: NetEntry['content'] }
+  | { kind: 'detached'; reason: string }
+  | { kind: 'error'; message: string };
 
 export interface Envelope<T> {
   source: typeof SOURCE;

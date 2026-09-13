@@ -47,6 +47,15 @@ export function createNetworkView(root: HTMLElement): NetworkView {
   });
   const clearBtn = button('Clear', () => store?.clear(), { title: 'Clear recorded requests' });
   const preserveBox = checkbox('Preserve log', false, (checked) => store?.updateSettings({ preserveLog: checked }), 'Keep requests across page navigations');
+  const captureBox = checkbox(
+    'Full capture',
+    false,
+    (checked) => {
+      store?.updateSettings({ fullCapture: checked });
+      if (checked) toast('Full capture is on. Reload the page to capture everything.');
+    },
+    "Record with chrome.debugger. Chrome hides requests whose call stack includes other extensions' scripts (e.g. Redux DevTools) from DevTools extensions.",
+  );
 
   const filterInput = h('input', { type: 'search', class: 'filter', placeholder: 'Filter URL  (-exclude, /regex/)', value: filter.text });
   filterInput.addEventListener('input', () => updateFilter({ text: filterInput.value }));
@@ -81,6 +90,7 @@ export function createNetworkView(root: HTMLElement): NetworkView {
     recordBtn,
     clearBtn,
     preserveBox,
+    captureBox,
     h('span', { class: 'sep' }),
     filterInput,
     methodSelect,
@@ -143,8 +153,11 @@ export function createNetworkView(root: HTMLElement): NetworkView {
     const total = store?.entries.length ?? 0;
     const shown = tbody.childElementCount;
     count.textContent = shown === total ? `${total} requests` : `${shown} / ${total} requests`;
-    listEmpty.hidden = total > 0;
-    if (store) listEmpty.textContent = store.settings.recording ? 'Recording network activity… Reload the page to capture everything.' : 'Recording is paused.';
+    const noFetch = total > 0 && shown === 0 && filter.type === 'fetch' && store?.settings.fullCapture === false;
+    listEmpty.hidden = total > 0 && !noFetch;
+    if (!store) return;
+    if (noFetch) listEmpty.textContent = "No Fetch/XHR requests. Chrome hides requests started through other extensions' scripts (e.g. Redux DevTools); turn on Full capture to see them.";
+    else listEmpty.textContent = store.settings.recording ? 'Recording network activity… Reload the page to capture everything.' : 'Recording is paused.';
   }
 
   function rowFor(entry: NetEntry): HTMLTableRowElement {
@@ -221,11 +234,14 @@ export function createNetworkView(root: HTMLElement): NetworkView {
 
   function renderSettings() {
     if (!store) return;
-    const { recording, preserveLog, maxBodyMB } = store.settings;
+    const { recording, preserveLog, maxBodyMB, fullCapture } = store.settings;
     recordBtn.textContent = recording ? '● Recording' : '○ Paused';
     recordBtn.classList.toggle('recording', recording);
     (preserveBox.querySelector('input') as HTMLInputElement).checked = preserveLog;
+    (captureBox.querySelector('input') as HTMLInputElement).checked = fullCapture;
     limitInput.value = String(maxBodyMB);
+    const captureError = store.takeCaptureError();
+    if (captureError) toast(captureError, 'error');
   }
 
   function exportFile(kind: 'har' | 'json') {

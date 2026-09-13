@@ -72,6 +72,38 @@ describe('NetworkStore', () => {
     expect(store.entries).toHaveLength(1);
   });
 
+  it('takes requests only from Full capture while it is on', async () => {
+    const { store, fake, events } = await setup({ fullCapture: true });
+    fake.finish(harEntry({ request: { url: 'https://example.com/devtools' } }), '');
+    store.addCaptured(harEntry({ request: { url: 'https://example.com/captured' } }), 'loaded', { text: '{}' });
+
+    expect(events).toEqual(['added']);
+    expect(store.entries).toHaveLength(1);
+    expect(store.entries[0]).toMatchObject({ contentState: 'loaded', content: { text: '{}' }, har: { request: { url: 'https://example.com/captured' } } });
+
+    store.updateSettings({ fullCapture: false });
+    expect(store.addCaptured(harEntry(), 'empty')).toBeNull();
+  });
+
+  it('turns Full capture off and reports the failure once', async () => {
+    const { store, events } = await setup({ fullCapture: true });
+    store.failCapture('detached');
+    expect(store.settings.fullCapture).toBe(false);
+    expect(events).toEqual(['settings']);
+    expect(store.takeCaptureError()).toBe('detached');
+    expect(store.takeCaptureError()).toBeNull();
+  });
+
+  it('persists settings but always starts recording', async () => {
+    let saved: object = { preserveLog: true, fullCapture: true };
+    const store = new NetworkStore({ get: async () => ({ ...saved, recording: false }), set: async (s) => void (saved = s) });
+    await store.start(fakeApi().api);
+    expect(store.settings).toEqual({ recording: true, preserveLog: true, maxBodyMB: 5, fullCapture: true });
+
+    store.updateSettings({ fullCapture: false, recording: false });
+    expect(saved).toEqual({ preserveLog: true, maxBodyMB: 5, fullCapture: false });
+  });
+
   it('drops listeners that throw', async () => {
     const { store, fake } = await setup();
     let calls = 0;
