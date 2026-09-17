@@ -804,3 +804,171 @@ input.invalid {
 .toast.error {
   background: var(--danger);
 }
+
+/* ── forms ─────────────────────────────────────────────────────────── */
+.forms-groups {
+  padding: 4px 0;
+}
+
+.form-group {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+
+.form-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: var(--bg-alt);
+}
+
+details.form-group > summary.form-group-head {
+  cursor: pointer;
+}
+
+.form-group-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 45%;
+}
+
+.rec-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rec-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 14px;
+  cursor: pointer;
+}
+
+.rec-row:hover {
+  background: var(--bg-hover);
+}
+
+.rec-row.selected {
+  background: var(--bg-selected);
+}
+
+.rec-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rec-meta {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.rec-note {
+  color: var(--warning);
+  cursor: help;
+}
+
+.rec-row .mini {
+  visibility: hidden;
+}
+
+.rec-row:hover .mini,
+.rec-row.selected .mini {
+  visibility: visible;
+}
+
+.rec-empty {
+  padding: 4px 6px 4px 14px;
+}
+
+.detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.detail-head .subbar {
+  border: none;
+  padding: 0;
+  background: none;
+}
+
+.detail-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 45%;
+}
+
+.name-input {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 3px;
+  padding: 2px 4px;
+  min-width: 200px;
+  flex: 0 1 280px;
+}
+
+.btn.danger {
+  color: var(--danger);
+}
+
+.field-table {
+  table-layout: fixed;
+}
+
+.field-table td:first-child,
+.field-table th:first-child {
+  width: 22px;
+}
+
+.field-table .c-field {
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field-table .c-current {
+  font-family: var(--mono);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field-table tr.row-different .c-current {
+  background: var(--match-bg);
+  color: var(--text);
+}
+
+.field-table tr.row-missing .c-field {
+  color: var(--warning);
+}
+
+.value-input {
+  width: 100%;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 3px;
+  padding: 1px 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.value-input:hover {
+  border-color: var(--border);
+}
+
+.value-input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+  outline: none;
+}

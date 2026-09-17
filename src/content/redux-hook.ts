@@ -1,5 +1,6 @@
 // Runs in the page's MAIN world at document_start, before any app script.
-import { SOURCE, isWindowEnvelope, type PageEvent, type PageRequest, type WindowEnvelope } from '../shared/messages';
+import { SOURCE, isFormMethod, isWindowEnvelope, type PageEvent, type PageRequest, type WindowEnvelope } from '../shared/messages';
+import { FormHandlers } from './forms';
 import { installReduxGlobals } from './redux/enhancer';
 import { findStoresInReactTree } from './redux/fiber';
 import { Registry } from './redux/registry';
@@ -20,6 +21,8 @@ if (!win[GUARD]) {
     scan: () => findStoresInReactTree(document),
   });
 
+  const forms = new FormHandlers(registry);
+
   try {
     installReduxGlobals(win, registry);
   } catch (err) {
@@ -30,16 +33,22 @@ if (!win[GUARD]) {
     if (event.source !== window || !isWindowEnvelope(event.data, 'to-page')) return;
     const request = event.data.payload as PageRequest;
     if (request?.kind !== 'request') return;
-    try {
-      const result = registry.handle(request.method, request.params as never);
-      post({ kind: 'response', requestId: request.requestId, ok: true, result });
-    } catch (err) {
+    const fail = (err: unknown) =>
       post({
         kind: 'response',
         requestId: request.requestId,
         ok: false,
         error: err instanceof Error ? err.message : String(err),
       });
+    try {
+      // Form filling runs in several passes, so a handler may answer with a promise.
+      const result = isFormMethod(request.method) ? forms.handle(request.method, request.params) : registry.handle(request.method, request.params as never);
+      void Promise.resolve(result).then(
+        (value) => post({ kind: 'response', requestId: request.requestId, ok: true, result: value }),
+        fail,
+      );
+    } catch (err) {
+      fail(err);
     }
   });
 }

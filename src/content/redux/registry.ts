@@ -3,8 +3,8 @@ import {
   SET_STATE,
   type ActionSummary,
   type PageEvent,
-  type RequestMap,
-  type RequestMethod,
+  type ReduxRequestMap,
+  type ReduxRequestMethod,
   type SerializedChange,
   type StoreHistory,
   type StoreInfo,
@@ -46,7 +46,7 @@ export interface RegistryOptions {
 }
 
 type Handlers = {
-  [M in RequestMethod]: (params: RequestMap[M]['params']) => RequestMap[M]['result'];
+  [M in ReduxRequestMethod]: (params: ReduxRequestMap[M]['params']) => ReduxRequestMap[M]['result'];
 };
 
 const LIMITED_REASON = 'Time travel and import need the enhancer hook';
@@ -64,6 +64,11 @@ export class Registry {
 
   get size(): number {
     return this.stores.length;
+  }
+
+  /** Registered stores, for features outside the Redux view such as form filling. */
+  records(): readonly StoreRecord[] {
+    return this.stores;
   }
 
   list(): StoreInfo[] {
@@ -154,9 +159,9 @@ export class Registry {
     }
   }
 
-  handle<M extends RequestMethod>(method: M, params: RequestMap[M]['params']): RequestMap[M]['result'] {
+  handle<M extends ReduxRequestMethod>(method: M, params: ReduxRequestMap[M]['params']): ReduxRequestMap[M]['result'] {
     this.attached = true;
-    const handler = this.handlers[method] as (p: RequestMap[M]['params']) => RequestMap[M]['result'];
+    const handler = this.handlers[method] as (p: ReduxRequestMap[M]['params']) => ReduxRequestMap[M]['result'];
     if (!handler) throw new Error(`Unknown method: ${String(method)}`);
     return handler(params);
   }

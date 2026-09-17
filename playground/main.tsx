@@ -2,6 +2,8 @@ import { configureStore, createAsyncThunk, createSlice, type PayloadAction } fro
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider, useDispatch, useSelector } from 'react-redux';
+import { reducer as formReducer } from 'redux-form';
+import { FormsPlayground } from './forms';
 
 interface Todo {
   id: number;
@@ -63,7 +65,7 @@ const todos = createSlice({
 });
 
 const store = configureStore({
-  reducer: { counter: counter.reducer, todos: todos.reducer },
+  reducer: { counter: counter.reducer, todos: todos.reducer, form: formReducer },
   devTools,
 });
 
@@ -120,6 +122,8 @@ function App() {
           ))}
         </ul>
       </section>
+
+      <FormsPlayground />
 
       <section>
         <h2>Other requests</h2>

@@ -42,7 +42,7 @@ export interface SerializedChange {
   after?: unknown;
 }
 
-export interface RequestMap {
+export interface ReduxRequestMap {
   init: { params: void; result: { stores: StoreInfo[]; histories: Record<string, StoreHistory> } };
   detect: { params: void; result: { stores: StoreInfo[] } };
   getEntry: { params: { storeId: string; entryId: number; part: EntryPart }; result: unknown };
@@ -57,7 +57,63 @@ export interface RequestMap {
   setPaused: { params: { storeId: string; paused: boolean }; result: null };
 }
 
+export type ReduxRequestMethod = keyof ReduxRequestMap;
+
+/** How a form's values are read and written: through redux-form or through the DOM. */
+export type FormKind = 'redux-form' | 'dom';
+
+export interface FormField {
+  /** redux-form field name (`address.street`, `items[0].code`) or DOM field key. */
+  path: string;
+  /** Field kind for the UI: `Field`, `FieldArray` or a DOM control type. */
+  kind: string;
+  /** Current value, serialized. */
+  value: unknown;
+  /** True when the value differs from the form's initial value (redux-form only). */
+  dirty?: boolean;
+  /** False when the value cannot be restored, e.g. a File. */
+  restorable: boolean;
+}
+
+export interface DetectedForm {
+  /** Addresses the form in a fill request, e.g. `rf:store-1:signup` or `dom:1`. */
+  id: string;
+  kind: FormKind;
+  /** Form name shown in the UI: the redux-form name or a DOM form label. */
+  name: string;
+  /** Identity used to match saved recordings, see panel/forms/match.ts. */
+  key: string;
+  /** Extra context for the UI: store name and mount key, or the form's selector. */
+  detail?: string;
+  fields: FormField[];
+}
+
+export interface FillEntry {
+  path: string;
+  /** Value to write, serialized. */
+  value: unknown;
+}
+
+export interface FillResult {
+  filled: string[];
+  skipped: { path: string; reason: string }[];
+}
+
+export interface FormRequestMap {
+  'forms/list': { params: void; result: { forms: DetectedForm[]; url: string } };
+  /** Writes `entries` into the form; `touch` also marks the fields touched so validation shows. */
+  'forms/fill': { params: { formId: string; entries: FillEntry[]; touch: boolean }; result: FillResult };
+}
+
+export type FormRequestMethod = keyof FormRequestMap;
+
+export type RequestMap = ReduxRequestMap & FormRequestMap;
+
 export type RequestMethod = keyof RequestMap;
+
+export function isFormMethod(method: RequestMethod): method is FormRequestMethod {
+  return method.startsWith('forms/');
+}
 
 export interface PageRequest<M extends RequestMethod = RequestMethod> {
   kind: 'request';

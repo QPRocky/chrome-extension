@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Local Dev Extension",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "DevTools panel for saving network requests to files and inspecting Redux state.",
   "minimum_chrome_version": "111",
   "devtools_page": "devtools/devtools.html",
