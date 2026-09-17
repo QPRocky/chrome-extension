@@ -180,7 +180,14 @@ function applyValue(field: DomField, serialized: unknown, touch: boolean): void 
 
   switch (field.kind) {
     case 'radio': {
-      const wanted = value === null ? null : String(value);
+      // An empty value means the group had no selection when it was saved.
+      if (value === null) {
+        for (const option of field.elements) (option as HTMLInputElement).checked = false;
+        fire(first, 'input');
+        fire(first, 'change');
+        break;
+      }
+      const wanted = String(value);
       const target = field.elements.find((el) => el.value === wanted) as HTMLInputElement | undefined;
       if (!target) throw new Error(`No radio option with value "${wanted}"`);
       if (!target.checked) target.click();

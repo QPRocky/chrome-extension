@@ -7,7 +7,9 @@ import { compareEntries, extraFields, matchRecordings, unappliedFields, unmatche
 import {
   RecordingStore,
   chromeRecordingStorage,
+  defaultInclude,
   fromExportFile,
+  hasValue,
   newId,
   recordingFromForm,
   toExportFile,
@@ -77,7 +79,6 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
     if (event.key === 'Enter') void saveRecording();
     if (event.key === 'Escape') closeSave();
   });
-  const dirtyOnly = checkbox('Only changed fields', true, () => undefined, 'Leave out fields that still hold the value the app loaded');
   const drawerTitle = h('span', { class: 'muted' });
   const drawer = h(
     'div',
@@ -87,7 +88,6 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
       { class: 'subbar' },
       drawerTitle,
       nameInput,
-      dirtyOnly,
       button('Save', () => void saveRecording(), { class: 'btn primary' }),
       h('span', { class: 'spacer' }),
       button('Close', () => closeSave()),
@@ -201,7 +201,6 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
     saveTargetId = form.id;
     drawerTitle.textContent = `Save values of “${form.name}”`;
     nameInput.value = defaultName(form);
-    dirtyOnly.hidden = form.kind !== 'redux-form';
     drawer.hidden = false;
     nameInput.focus();
     nameInput.select();
@@ -220,13 +219,15 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
     await refresh();
     const form = forms.find((candidate) => candidate.id === saveTargetId);
     if (!form) return toast('That form is not on the page right now', 'error');
-    const onlyDirty = form.kind === 'redux-form' && dirtyInput().checked;
-    const recording = recordingFromForm(form, name, origin, pagePath, onlyDirty);
-    if (recording.entries.length === 0) return toast(onlyDirty ? 'No changed fields to save' : 'This form has no values to save', 'error');
+    const recording = recordingFromForm(form, name, origin, pagePath);
+    if (recording.entries.length === 0) return toast('This form has no values to save', 'error');
+    // Everything is kept, but a recording that would fill nothing is a mistake.
+    const included = recording.entries.filter((entry) => entry.include).length;
+    if (included === 0) return toast('No filled fields to save', 'error');
     await store.save(recording);
     selectedId = recording.id;
     closeSave();
-    toast(`Saved ${recording.entries.length} fields`);
+    toast(`Saved ${included} of ${recording.entries.length} fields`);
     renderAll();
   }
 
@@ -236,7 +237,7 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
     const previous = new Map(recording.entries.map((entry) => [entry.path, entry.include]));
     const entries: RecordingEntry[] = form.fields
       .filter((field) => field.restorable)
-      .map((field) => ({ path: field.path, kind: field.kind, value: field.value, include: previous.get(field.path) ?? true }));
+      .map((field) => ({ path: field.path, kind: field.kind, value: field.value, include: previous.get(field.path) ?? defaultInclude(field) }));
     await store.save({ ...recording, entries, formKey: form.key, formName: form.name });
     toast(`Updated ${entries.length} fields from the form`);
   }
@@ -308,10 +309,6 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
   function matchesSearch(recording: Recording): boolean {
     if (!search) return true;
     return `${recording.name}\n${recording.formName}\n${recording.notes ?? ''}`.toLowerCase().includes(search);
-  }
-
-  function dirtyInput(): HTMLInputElement {
-    return dirtyOnly.querySelector('input')!;
   }
 
   // ── rendering ──────────────────────────────────────────────────────────
@@ -478,10 +475,14 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
         'tbody',
         null,
         ...rows.map((row) => {
-          const include = h('input', { type: 'checkbox', checked: row.include, title: 'Fill this field' });
+          const include = h('input', {
+            type: 'checkbox',
+            checked: row.include,
+            title: hasValue(row.saved) ? 'Fill this field' : 'Empty this field when filling',
+          });
           include.addEventListener('change', () => void setEntry(recording, row.path, { include: include.checked }));
 
-          const value = h('input', { type: 'text', class: 'value-input', value: valueText(row.saved), spellcheck: 'false' });
+          const value = h('input', { type: 'text', class: 'value-input', value: valueText(row.saved), placeholder: 'empty', spellcheck: 'false' });
           value.addEventListener('change', () => {
             try {
               void setEntry(recording, row.path, { value: parseValueText(value.value, row.saved) });
@@ -493,7 +494,7 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
 
           return h(
             'tr',
-            { class: `row-${row.status}` },
+            { class: `row-${row.status}${row.include ? '' : ' off'}` },
             h('td', null, include),
             h('td', { class: 'c-field', title: `${row.path} (${row.kind})` }, row.path),
             h('td', null, value),
@@ -516,20 +517,20 @@ function fieldCount(count: number): string {
 
 function valueText(value: unknown): string {
   if (typeof value === 'string') return value;
+  // An empty field is shown as an empty box rather than its serialized marker.
+  if (isUndefined(value)) return '';
   return JSON.stringify(value) ?? '';
 }
 
-/** Strings are edited as plain text, everything else as JSON. */
+/** Strings and empty fields are edited as plain text, everything else as JSON. */
 function parseValueText(text: string, previous: unknown): unknown {
   if (typeof previous === 'string') return text;
+  if (isUndefined(previous)) return text === '' ? previous : text;
   return JSON.parse(text);
 }
 
-function hasValue(value: unknown): boolean {
-  if (value === null || value === undefined || value === '' || value === false) return false;
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === 'object') return (value as Record<string, unknown>).$devkit !== 'undefined';
-  return true;
+function isUndefined(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && (value as Record<string, unknown>).$devkit === 'undefined';
 }
 
 function defaultName(form: DetectedForm): string {

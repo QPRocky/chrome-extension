@@ -1,4 +1,4 @@
-import type { DetectedForm, FormKind } from '../../shared/messages';
+import type { DetectedForm, FormField, FormKind } from '../../shared/messages';
 
 export interface RecordingEntry {
   path: string;
@@ -128,10 +128,27 @@ export class RecordingStore {
   }
 }
 
+/**
+ * Whether a field is filled in by default, which is what a fill then writes.
+ * Everything else is kept in the recording, one tick away from being used: a
+ * field the app loaded, or an empty one that clears the field when filled.
+ */
+export function defaultInclude(field: FormField): boolean {
+  return field.dirty ?? hasValue(field.value);
+}
+
+/** True for a value the user would call filled in; an empty one reads as `undefined`. */
+export function hasValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === '' || value === false) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'object') return (value as Record<string, unknown>).$devkit !== 'undefined';
+  return true;
+}
+
 /** Builds a recording from a form's current values. */
-export function recordingFromForm(form: DetectedForm, name: string, origin: string, path: string, onlyDirty: boolean): Recording {
+export function recordingFromForm(form: DetectedForm, name: string, origin: string, path: string): Recording {
   const now = Date.now();
-  const fields = form.fields.filter((field) => field.restorable && (!onlyDirty || field.dirty !== false));
+  const fields = form.fields.filter((field) => field.restorable);
   return {
     id: newId(),
     name,
@@ -140,7 +157,7 @@ export function recordingFromForm(form: DetectedForm, name: string, origin: stri
     formName: form.name,
     origin,
     path,
-    entries: fields.map((field) => ({ path: field.path, kind: field.kind, value: field.value, include: true })),
+    entries: fields.map((field) => ({ path: field.path, kind: field.kind, value: field.value, include: defaultInclude(field) })),
     createdAt: now,
     updatedAt: now,
   };

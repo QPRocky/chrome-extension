@@ -959,6 +959,16 @@ details.form-group > summary.form-group-head {
   color: var(--warning);
 }
 
+/* Kept in the recording but not written by a fill. */
+.field-table tr.off {
+  opacity: 0.55;
+}
+
+.field-table tr.off .c-current {
+  background: none;
+  color: var(--muted);
+}
+
 .value-input {
   width: 100%;
   border: 1px solid transparent;

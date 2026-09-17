@@ -11,7 +11,7 @@ const ORIGIN = 'https://app.example.fi';
 
 /** The page's form, with values a fill can change. */
 function page() {
-  const values: Record<string, unknown> = { applicant: undefined, email: undefined };
+  const values: Record<string, unknown> = { applicant: undefined, email: undefined, city: undefined };
   const form = (): DetectedForm => ({
     id: 'rf:store-1:application',
     kind: 'redux-form',
@@ -68,6 +68,15 @@ async function settle(): Promise<void> {
 function currentValues(root: HTMLElement): Record<string, string> {
   const rows = [...root.querySelectorAll('.field-table tbody tr')];
   return Object.fromEntries(rows.map((row) => [row.querySelector('.c-field')!.textContent, row.querySelector('.c-current')!.textContent]));
+}
+
+/** Each saved row as [field, saved value as shown, is it filled in]. */
+function savedRows(root: HTMLElement): [string, string, boolean][] {
+  return [...root.querySelectorAll('.field-table tbody tr')].map((row) => [
+    row.querySelector('.c-field')!.textContent ?? '',
+    row.querySelector<HTMLInputElement>('.value-input')!.value,
+    row.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked,
+  ]);
 }
 
 function drawerButton(root: HTMLElement, label: string): HTMLButtonElement {
@@ -160,7 +169,7 @@ it('saves the values the form has when Save is pressed, not when the drawer was 
   click(drawerButton(root, 'Save'));
   await settle();
   expect(root.querySelector('.rec-row')).toBeNull();
-  expect(document.getElementById('toast')!.textContent).toBe('No changed fields to save');
+  expect(document.getElementById('toast')!.textContent).toBe('No filled fields to save');
 
   // The drawer stays open; the user fills the form on the page and presses Save again.
   target.values.applicant = 'jukka';
@@ -168,5 +177,28 @@ it('saves the values the form has when Save is pressed, not when the drawer was 
   await settle();
 
   expect(root.querySelector('.rec-row .rec-name')!.textContent).toBe('eka');
-  expect(root.querySelector<HTMLInputElement>('.field-table .value-input')!.value).toBe('jukka');
+  // Every field is kept; only the filled one is written by a fill, and an empty
+  // value shows as an empty box instead of its serialized marker.
+  expect(savedRows(root)).toEqual([
+    ['applicant', 'jukka', true],
+    ['email', '', false],
+    ['city', '', false],
+  ]);
+});
+
+it('ticks the fields that changed and leaves the empty ones off when updating from the form', async () => {
+  const target = await openRecording([recording('eka', [['applicant', 'jukka']])]);
+  target.values.applicant = 'jukka';
+  target.values.email = 'a@b.fi';
+  target.view.refresh();
+  await settle();
+
+  click(detailButton(root, 'Update from form'));
+  await settle();
+
+  expect(savedRows(root)).toEqual([
+    ['applicant', 'jukka', true],
+    ['email', 'a@b.fi', true],
+    ['city', '', false],
+  ]);
 });

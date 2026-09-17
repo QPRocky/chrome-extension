@@ -124,6 +124,21 @@ describe('fillDomForm', () => {
     expect(field(form, 'terms')?.value).toBe(true);
   });
 
+  it('clears a radio group when the saved value is empty', async () => {
+    render(`
+      <form>
+        <input type="radio" name="speed" value="slow" /><input type="radio" name="speed" value="fast" checked />
+      </form>
+    `);
+
+    const result = await fillDomForm(document, loc, 'dom:0', [{ path: 'speed', value: { $devkit: 'undefined' } }], false);
+
+    expect(result.skipped).toEqual([]);
+    expect(result.filled).toEqual(['speed']);
+    const [form] = detectDomForms(document, loc);
+    expect(field(form, 'speed')?.value).toBeNull();
+  });
+
   it('fires input and change events so React sees the value', async () => {
     render(`<form><input name="email" /></form>`);
     const input = document.querySelector('input')!;
