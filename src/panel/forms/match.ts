@@ -5,6 +5,9 @@ import type { Recording } from './storage';
 /** How much of a recording's fields a DOM form must still have to count as a match. */
 const PARTIAL_MIN = 0.6;
 
+/** Recordings are listed by name, so the same one always sits in the same place. */
+const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
 export interface Match {
   recording: Recording;
   /** True when the form key is identical; false for a partial DOM match. */
@@ -30,13 +33,13 @@ export function matchRecordings(form: DetectedForm, recordings: readonly Recordi
     matches.push({ recording, exact, score });
   }
 
-  return matches.sort((a, b) => Number(b.exact) - Number(a.exact) || b.score - a.score || used(b.recording) - used(a.recording));
+  return matches.sort((a, b) => Number(b.exact) - Number(a.exact) || byName.compare(a.recording.name, b.recording.name));
 }
 
 /** Recordings of this origin that none of the detected forms claims. */
 export function unmatchedRecordings(forms: readonly DetectedForm[], recordings: readonly Recording[], origin: string): Recording[] {
   const claimed = new Set(forms.flatMap((form) => matchRecordings(form, recordings, origin).map((match) => match.recording.id)));
-  return recordings.filter((recording) => recording.origin === origin && !claimed.has(recording.id)).sort((a, b) => used(b) - used(a));
+  return recordings.filter((recording) => recording.origin === origin && !claimed.has(recording.id)).sort((a, b) => byName.compare(a.name, b.name));
 }
 
 export type FieldStatus = 'same' | 'different' | 'missing' | 'unknown';
@@ -106,8 +109,4 @@ function overlap(recording: Recording, paths: ReadonlySet<string>): number {
   if (recording.entries.length === 0) return 0;
   const shared = recording.entries.filter((entry) => paths.has(entry.path)).length;
   return shared / recording.entries.length;
-}
-
-function used(recording: Recording): number {
-  return recording.lastUsedAt ?? recording.updatedAt;
 }

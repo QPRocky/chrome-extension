@@ -59,12 +59,12 @@ describe('matchRecordings', () => {
     expect(matches[0].score).toBeCloseTo(2 / 3);
   });
 
-  it('puts exact matches first, then the most recently used', () => {
-    const exact = recording({ id: 'exact', entries: [['email', 'a']] });
-    const older = recording({ id: 'older', entries: [['email', 'a']], lastUsedAt: 10 });
-    const newer = recording({ id: 'newer', entries: [['email', 'a']], lastUsedAt: 20 });
-    const matches = matchRecordings(form({ fields: [['email', '']] }), [older, exact, newer], ORIGIN);
-    expect(matches.map((match) => match.recording.id)).toEqual(['newer', 'older', 'exact']);
+  it('lists recordings by name, newest last if that is where the name puts it', () => {
+    const first = recording({ id: 'first', name: 'Ahonen', entries: [['email', 'a']], lastUsedAt: 10 });
+    const second = recording({ id: 'second', name: 'hakemus 2', entries: [['email', 'a']], lastUsedAt: 30 });
+    const third = recording({ id: 'third', name: 'Hakemus 10', entries: [['email', 'a']], lastUsedAt: 20 });
+    const matches = matchRecordings(form({ fields: [['email', '']] }), [third, first, second], ORIGIN);
+    expect(matches.map((match) => match.recording.id)).toEqual(['first', 'second', 'third']);
   });
 });
 

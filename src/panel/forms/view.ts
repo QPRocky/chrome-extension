@@ -390,8 +390,10 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
 
   function renderDetail(): void {
     const recording = selected();
-    // Keep the table stable while a value is being edited.
-    if (detail.contains(document.activeElement) && document.activeElement !== detail) return;
+    // Keep the table stable while a value is being typed, but not for a focused
+    // button: the pane's own buttons are what trigger most of these redraws.
+    if (isEditingText()) return;
+    const focused = focusKey();
 
     if (!recording) {
       detail.replaceChildren(h('div', { class: 'empty' }, forms.length > 0 ? 'Select a recording, or save a form’s current values.' : ''));
@@ -430,6 +432,37 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
     if (extras.length > 0) {
       detail.append(h('div', { class: 'rec-empty muted' }, `The form has ${extras.length} field(s) this recording does not set: ${extras.join(', ')}`));
     }
+    restoreFocus(focused);
+  }
+
+  /** True while a text field of the detail pane holds input that is not saved yet. */
+  function isEditingText(): boolean {
+    const el = document.activeElement;
+    return el instanceof HTMLInputElement && el.type === 'text' && detail.contains(el);
+  }
+
+  /**
+   * The detail pane is rebuilt from scratch, so the control the user is on is
+   * named before the redraw and found again after it. Buttons go by label and
+   * the include boxes by their field, both stable across a redraw.
+   */
+  function focusKey(): string | null {
+    const el = document.activeElement;
+    if (!(el instanceof HTMLElement) || !detail.contains(el)) return null;
+    if (el instanceof HTMLButtonElement) return `button:${el.textContent ?? ''}`;
+    const field = el.closest('tr')?.querySelector('.c-field')?.textContent;
+    return el instanceof HTMLInputElement && el.type === 'checkbox' && field ? `include:${field}` : null;
+  }
+
+  function restoreFocus(key: string | null): void {
+    if (!key) return;
+    const value = key.slice(key.indexOf(':') + 1);
+    if (key.startsWith('button:')) {
+      [...detail.querySelectorAll('button')].find((el) => el.textContent === value && !el.disabled)?.focus();
+      return;
+    }
+    const row = [...detail.querySelectorAll('tr')].find((el) => el.querySelector('.c-field')?.textContent === value);
+    row?.querySelector<HTMLInputElement>('input[type=checkbox]')?.focus();
   }
 
   function fieldTable(recording: Recording, rows: CompareRow[]): HTMLElement {
