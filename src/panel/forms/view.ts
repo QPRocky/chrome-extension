@@ -36,7 +36,8 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
   let origin = '';
   let pagePath = '';
   let selectedId: string | null = null;
-  let saveTarget: DetectedForm | null = null;
+  /** Id only: the form is looked up again when saving, its values may have changed since. */
+  let saveTargetId: string | null = null;
   let search = '';
   let touchAfterFill = readTouch();
   let listToken = 0;
@@ -197,7 +198,7 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
   }
 
   function openSave(form: DetectedForm): void {
-    saveTarget = form;
+    saveTargetId = form.id;
     drawerTitle.textContent = `Save values of “${form.name}”`;
     nameInput.value = defaultName(form);
     dirtyOnly.hidden = form.kind !== 'redux-form';
@@ -207,15 +208,18 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
   }
 
   function closeSave(): void {
-    saveTarget = null;
+    saveTargetId = null;
     drawer.hidden = true;
   }
 
   async function saveRecording(): Promise<void> {
-    const form = saveTarget;
-    if (!form) return;
+    if (!saveTargetId) return;
     const name = nameInput.value.trim();
     if (!name) return toast('Give the recording a name', 'error');
+    // The form is usually filled while the drawer is open, so its values are read now.
+    await refresh();
+    const form = forms.find((candidate) => candidate.id === saveTargetId);
+    if (!form) return toast('That form is not on the page right now', 'error');
     const onlyDirty = form.kind === 'redux-form' && dirtyInput().checked;
     const recording = recordingFromForm(form, name, origin, pagePath, onlyDirty);
     if (recording.entries.length === 0) return toast(onlyDirty ? 'No changed fields to save' : 'This form has no values to save', 'error');

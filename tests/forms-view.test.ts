@@ -17,7 +17,8 @@ function page() {
     kind: 'redux-form',
     name: 'application',
     key: 'application',
-    fields: Object.entries(values).map(([path, value]) => ({ path, kind: 'Field', value, restorable: true })),
+    // Like redux-form: a field is dirty once it holds something the app did not load.
+    fields: Object.entries(values).map(([path, value]) => ({ path, kind: 'Field', value, dirty: value !== undefined, restorable: true })),
   });
 
   const client = {
@@ -69,6 +70,12 @@ function currentValues(root: HTMLElement): Record<string, string> {
   return Object.fromEntries(rows.map((row) => [row.querySelector('.c-field')!.textContent, row.querySelector('.c-current')!.textContent]));
 }
 
+function drawerButton(root: HTMLElement, label: string): HTMLButtonElement {
+  const found = [...root.querySelectorAll<HTMLButtonElement>('.drawer button')].find((el) => el.textContent === label);
+  if (!found) throw new Error(`No “${label}” button in the save drawer`);
+  return found;
+}
+
 function detailButton(root: HTMLElement, label: string): HTMLButtonElement {
   const found = [...root.querySelectorAll<HTMLButtonElement>('.rec-head button')].find((el) => el.textContent === label);
   if (!found) throw new Error(`No “${label}” button in the detail pane`);
@@ -94,12 +101,17 @@ afterEach(() => {
   root.remove();
 });
 
-async function openRecording(recordings: Recording[]) {
+async function openView(recordings: Recording[]) {
   const target = page();
   const view = createFormsView(root, target.client, { onNavigated: () => undefined }, memoryStorage(recordings));
   await settle();
-  click(root.querySelector<HTMLElement>('.rec-row')!);
   return { ...target, view };
+}
+
+async function openRecording(recordings: Recording[]) {
+  const opened = await openView(recordings);
+  click(root.querySelector<HTMLElement>('.rec-row')!);
+  return opened;
 }
 
 it('shows the new current value after filling from the detail pane', async () => {
@@ -137,4 +149,24 @@ it('does not redraw the table while a value is being typed', async () => {
   await settle();
 
   expect(root.querySelector<HTMLInputElement>('.field-table .value-input')!.value).toBe('kesken');
+});
+
+it('saves the values the form has when Save is pressed, not when the drawer was opened', async () => {
+  const target = await openView([]);
+
+  click([...root.querySelectorAll<HTMLButtonElement>('.form-group-head button')].find((el) => el.textContent === 'Save values…')!);
+  const name = root.querySelector<HTMLInputElement>('.drawer .name-input')!;
+  name.value = 'eka';
+  click(drawerButton(root, 'Save'));
+  await settle();
+  expect(root.querySelector('.rec-row')).toBeNull();
+  expect(document.getElementById('toast')!.textContent).toBe('No changed fields to save');
+
+  // The drawer stays open; the user fills the form on the page and presses Save again.
+  target.values.applicant = 'jukka';
+  click(drawerButton(root, 'Save'));
+  await settle();
+
+  expect(root.querySelector('.rec-row .rec-name')!.textContent).toBe('eka');
+  expect(root.querySelector<HTMLInputElement>('.field-table .value-input')!.value).toBe('jukka');
 });
