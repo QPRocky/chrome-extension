@@ -332,7 +332,7 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
             { class: 'form-group-head' },
             h('span', { class: 'form-group-name', title: form.detail ?? form.name }, form.name),
             h('span', { class: `badge ${form.kind === 'redux-form' ? 'hooked' : 'limited'}`, title: form.detail ?? '' }, form.kind),
-            h('span', { class: 'muted' }, `${form.fields.length} fields · ${filled} filled`),
+            h('span', { class: 'muted' }, `${fieldCount(form.fields.length)} · ${filled} filled`),
             h('span', { class: 'spacer' }),
             button('Save values…', () => openSave(form), { class: 'btn small' }),
           ),
@@ -374,9 +374,9 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
     if (recording.id === selectedId) classes.push('selected');
     const row = h(
       'li',
-      { class: classes.join(' '), title: note ?? `${recording.entries.length} fields` },
+      { class: classes.join(' '), title: note ?? fieldCount(recording.entries.length) },
       h('span', { class: 'rec-name' }, recording.name),
-      h('span', { class: 'rec-meta muted' }, `${recording.entries.filter((entry) => entry.include).length} fields${recording.lastUsedAt ? ` · used ${formatDate(recording.lastUsedAt)}` : ''}`),
+      h('span', { class: 'rec-meta muted' }, `${fieldCount(recording.entries.filter((entry) => entry.include).length)}${recording.lastUsedAt ? ` · used ${formatDate(recording.lastUsedAt)}` : ''}`),
       note ? h('span', { class: 'rec-note muted', title: note }, '!') : null,
       h('button', { type: 'button', class: 'mini', title: 'Fill the form with these values', onClick: (event: MouseEvent) => (event.stopPropagation(), void fill(recording)) }, 'fill'),
     );
@@ -409,7 +409,7 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
 
     const head = h(
       'div',
-      { class: 'detail-head' },
+      { class: 'rec-head' },
       name,
       notes,
       h(
@@ -420,7 +420,7 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
         button('Duplicate', () => void duplicate(recording)),
         button('Delete', () => void remove(recording), { class: 'btn danger' }),
         h('span', { class: 'spacer' }),
-        h('span', { class: 'muted detail-meta' }, `${recording.kind} · ${recording.formName} · saved ${formatDate(recording.createdAt)}${recording.path ? ` on ${recording.path}` : ''}`),
+        h('span', { class: 'muted rec-head-meta' }, `${recording.kind} · ${recording.formName} · saved ${formatDate(recording.createdAt)}${recording.path ? ` on ${recording.path}` : ''}`),
       ),
     );
 
@@ -471,6 +471,10 @@ export function createFormsView(root: HTMLElement, client: ReduxClient, navigati
     const entries = recording.entries.map((entry) => (entry.path === path ? { ...entry, ...changes } : entry));
     await patch(recording, { entries });
   }
+}
+
+function fieldCount(count: number): string {
+  return `${count} field${count === 1 ? '' : 's'}`;
 }
 
 function valueText(value: unknown): string {

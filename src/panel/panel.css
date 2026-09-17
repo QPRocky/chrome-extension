@@ -887,20 +887,20 @@ details.form-group > summary.form-group-head {
   padding: 4px 6px 4px 14px;
 }
 
-.detail-head {
+.rec-head {
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin-bottom: 6px;
 }
 
-.detail-head .subbar {
+.rec-head .subbar {
   border: none;
   padding: 0;
   background: none;
 }
 
-.detail-meta {
+.rec-head-meta {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -912,8 +912,14 @@ details.form-group > summary.form-group-head {
   background: var(--bg);
   border-radius: 3px;
   padding: 2px 4px;
-  min-width: 200px;
+  width: 100%;
+}
+
+/* In the save drawer the inputs sit in a row, so they size along it instead. */
+.drawer .name-input {
+  width: auto;
   flex: 0 1 280px;
+  min-width: 160px;
 }
 
 .btn.danger {
